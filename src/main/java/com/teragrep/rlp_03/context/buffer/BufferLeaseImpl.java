@@ -125,4 +125,9 @@ public class BufferLeaseImpl implements BufferLease {
             lock.unlock();
         }
     }
+
+    @Override
+    public Phaser phaser() {
+        return this.phaser;
+    }
 }
