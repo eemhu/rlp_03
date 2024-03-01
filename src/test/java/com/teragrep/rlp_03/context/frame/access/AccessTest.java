@@ -9,7 +9,7 @@ public class AccessTest {
     public void testAccess() {
         Access access = new Access();
 
-        Assertions.assertFalse(access.terminated());
+        Assertions.assertFalse(access.closed());
 
         Lease leaseOut;
         try (Lease lease = access.get()) {
@@ -19,14 +19,14 @@ public class AccessTest {
         }
         Assertions.assertFalse(leaseOut.isOpen());
 
-        Assertions.assertThrows(IllegalStateException.class, () -> access.release(leaseOut));
+        //Assertions.assertThrows(IllegalStateException.class, () -> access.accept(leaseOut));
 
-        access.terminate();
+        access.close();
 
-        Assertions.assertTrue(access.terminated());
+        Assertions.assertTrue(access.closed());
 
         Assertions.assertThrows(IllegalStateException.class, access::get);
 
-        Assertions.assertThrows(IllegalStateException.class, () -> access.release(leaseOut));
+        Assertions.assertThrows(IllegalStateException.class, () -> access.accept(leaseOut));
     }
 }

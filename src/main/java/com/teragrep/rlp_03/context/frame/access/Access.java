@@ -1,79 +1,48 @@
 package com.teragrep.rlp_03.context.frame.access;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.Phaser;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public final class Access implements Supplier<Lease> {
-
-    private long accessCount;
-    private boolean terminated;
-    private final Lock lock;
+public final class Access implements AutoCloseable, Consumer<Lease>, Supplier<Lease> {
+    final Phaser phaser;
     public Access() {
-        this.accessCount = 0; // TODO consider using a semaphore
-        this.terminated = false;
-        this.lock = new ReentrantLock();
+        this.phaser = new Phaser(1);
     }
 
     @Override
     public Lease get() {
-        lock.lock();
-        try {
-            if (terminated()) {
-                throw new IllegalStateException("Access already terminated");
-            }
+        if (phaser.isTerminated()) {
+            // phaser was already closed by releasing all leases
+            throw new IllegalStateException("Rental phaser already terminated");
+        }
 
-            accessCount++;
-            return new Lease(this);
-        } finally {
-            lock.unlock();
+        phaser.register(); // register new lease to phaser
+        return new Lease(this);
+    }
+
+    @Override
+    public void close() throws IllegalStateException {
+        phaser.arriveAndDeregister(); // registered=0, should terminate phaser
+        if (!phaser.isTerminated()) {
+            throw new IllegalStateException("Open leases exist!");
         }
     }
 
-    public void terminate() {
-        if (lock.tryLock()) {
-            try {
-                if (accessCount != 0) {
-                    throw new IllegalStateException("Open leases still exist");
-                } else {
-                    if (terminated) {
-                        throw new IllegalStateException("Access already terminated");
-                    }
-                    terminated = true;
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-        else {
-            throw new IllegalStateException("Lease operation in progress");
-        }
-    }
-
-    public boolean terminated() {
-        lock.lock();
-        try {
-            return terminated;
-        }
-        finally {
-            lock.unlock();
-        }
-    }
-
-    public void release(Lease lease) {
+    @Override
+    public void accept(Lease lease) {
         if (lease.isOpen()) {
-            throw new IllegalStateException("Can not be release an open lease");
+            // don't allow releasing an open lease
+            throw new IllegalStateException("Cannot release an open lease");
+        } else if (phaser.isTerminated()) {
+            throw new IllegalStateException("Phaser was already terminated");
         }
-        lock.lock();
-        try {
-            long newAccessCount = accessCount - 1;
-            if (newAccessCount < 0) {
-                throw new IllegalStateException("AccessCount must not be negative");
-            }
-            accessCount = newAccessCount;
-        }
-        finally {
-            lock.unlock();
-        }
+        // deregister released lease
+        phaser.arriveAndDeregister();
+    }
+
+    public boolean closed() {
+        // should be closed if terminated
+        return phaser.isTerminated();
     }
 }

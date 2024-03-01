@@ -193,7 +193,7 @@ public class RelpReadImpl implements RelpRead {
         }
 
         // terminate access
-        frameAccess.access().terminate();
+        frameAccess.access().close();
 
         // return buffers
         List<BufferLease> leases = relpFrame.release();
